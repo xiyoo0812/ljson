@@ -13,11 +13,14 @@ namespace ljson {
     public:
         int encode(lua_State* L) {
             size_t data_len;
+            yyjson_write_err err;
             yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
             yyjson_mut_val* val = encode_one(L, doc, -1, 0);
-            char* json = yyjson_mut_val_write_opts(val, YYJSON_WRITE_ALLOW_INVALID_UNICODE, nullptr, &data_len, nullptr);
+            char* json = yyjson_mut_val_write_opts(val, YYJSON_WRITE_ALLOW_INVALID_UNICODE, nullptr, &data_len, &err);
+            if (!json) luaL_error(L, err.msg);
             lua_pushlstring(L, json, data_len);
             yyjson_mut_doc_free(doc);
+            free(json);
             return 1;
         }
 
