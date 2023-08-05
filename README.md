@@ -18,14 +18,14 @@ local ljson = require("ljson")
 --value: 输入的lua
 --pretty: 格式化输出json，取值（nil/0/1）
 --res：输出字符串
---备注：会抛error，请输液pcall
+--备注：会抛error，请使用pcall
 local res = ljson.encode(value, pretty)
 
 --解码
 --value: 输入的字符串
 --numkeyable: 将字符串key尝试转为数字key，取值（nil/0/1）
 --res：输出lua
---备注：会抛error，请输液pcall
+--备注：会抛error，请使用pcall
 local res = ljson.decode(value, numkeyable)
 ```
 

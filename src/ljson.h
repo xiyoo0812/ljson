@@ -63,19 +63,26 @@ namespace ljson {
             switch (type) {
             case LUA_TNIL:
                 return yyjson_mut_null(doc);
+            case LUA_TBOOLEAN:
+                return yyjson_mut_bool(doc, lua_toboolean(L, idx));
+            case LUA_TNUMBER:
+                return lua_isinteger(L, idx) ? yyjson_mut_sint(doc, lua_tointeger(L, idx)) : yyjson_mut_real(doc, lua_tonumber(L, idx));
             case LUA_TSTRING: {
                 size_t len;
                 const char* val = lua_tolstring(L, idx, &len);
                 return yyjson_mut_strn(doc, val, len);
             }
-            case LUA_TBOOLEAN:
-                return yyjson_mut_bool(doc, lua_toboolean(L, idx));
-            case LUA_TNUMBER:
-                return lua_isinteger(L, idx) ? yyjson_mut_sint(doc, lua_tointeger(L, idx)) : yyjson_mut_real(doc, lua_tonumber(L, idx));
             case LUA_TTABLE:
                 return table_encode(L, doc, idx, depth + 1);
+            case LUA_TUSERDATA:
+            case LUA_TLIGHTUSERDATA:
+                return yyjson_mut_str(doc, "unsupported userdata");
+            case LUA_TFUNCTION:
+                return yyjson_mut_str(doc, "unsupported function");
+            case LUA_TTHREAD:
+                return yyjson_mut_str(doc, "unsupported thread");
             }
-            return nullptr;
+            return yyjson_mut_str(doc, "unsupported datatype");
         }
 
         yyjson_mut_val* key_encode(lua_State* L, yyjson_mut_doc* doc, int idx) {
@@ -95,11 +102,7 @@ namespace ljson {
             lua_pushnil(L);
             yyjson_mut_val* array = yyjson_mut_arr(doc);
             while (lua_next(L, index) != 0) {
-                auto value = encode_one(L, doc, -1, depth);
-                if (!value) {
-                    luaL_error(L, "value is unsupported type");
-                }
-                yyjson_mut_arr_append(array, value);
+                yyjson_mut_arr_append(array, encode_one(L, doc, -1, depth));
                 lua_pop(L, 1);
             }
             return array;
@@ -112,6 +115,9 @@ namespace ljson {
                 yyjson_mut_val* object = yyjson_mut_obj(doc);
                 while (lua_next(L, index) != 0) {
                     auto key = key_encode(L, doc, -2);
+                    if (!key) {
+                        luaL_error(L, "json key must is number or string");
+                    }
                     auto value = encode_one(L, doc, -1, depth);
                     unsafe_yyjson_mut_obj_add(object, key, value, unsafe_yyjson_get_len(object));
                     lua_pop(L, 1);
@@ -154,7 +160,6 @@ namespace ljson {
                 } else {
                     auto skey = unsafe_yyjson_get_str(key);
                     if (lua_stringtonumber(L, skey) == 0) {
-                        //默认尝试 string key 转 number
                         lua_pushlstring(L, skey, unsafe_yyjson_get_len(key));
                     }
                 }
