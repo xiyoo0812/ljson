@@ -11,6 +11,24 @@ lua bindings for yyjson(https://github.com/ibireme/yyjson).
   &emsp;|--ljson <br>
   &emsp;|--luakit
 
+# 接口说明
+```lua
+local ljson = require("ljson")
+--编码
+--value: 输入的lua
+--pretty: 格式化输出json，取值（nil/0/1）
+--res：输出字符串
+--备注：会抛error，请输液pcall
+local res = ljson.encode(value, pretty)
+
+--解码
+--value: 输入的字符串
+--numkeyable: 将字符串key尝试转为数字key，取值（nil/0/1）
+--res：输出lua
+--备注：会抛error，请输液pcall
+local res = ljson.decode(value, numkeyable)
+```
+
 # 用法参考
 ```lua
 --本示例使用了quanta引擎
@@ -59,7 +77,7 @@ local vv = {
 
 log_debug("%s, %s", #vv.detail, vv.detail)
 
-local c = json_encode(vv)
+local c = json_encode(vv, 1)
 log_debug("json_encode2: %s", c)
 
 local d = json_decode(c)
@@ -71,7 +89,7 @@ log_debug("decode_byname: %s", dd)
 local a = json_encode(test)
 log_debug("json_encode: %s", a)
 
-local b = json_decode(a)
+local b = json_decode(a, 1)
 log_debug(type(b.tid), b.tid)
 log_debug(type(b.player_id), b.player_id)
 log_debug("json_decode: %s", b)

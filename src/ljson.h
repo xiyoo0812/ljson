@@ -15,8 +15,11 @@ namespace ljson {
             size_t data_len;
             yyjson_write_err err;
             yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
-            yyjson_mut_val* val = encode_one(L, doc, -1, 0);
-            char* json = yyjson_mut_val_write_opts(val, YYJSON_WRITE_ALLOW_INVALID_UNICODE, nullptr, &data_len, &err);
+            yyjson_mut_val* val = encode_one(L, doc, 1, 0);
+            bool prettyable = (bool)luaL_optinteger(L, 2, 0);
+            yyjson_write_flag flag = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
+            if (prettyable) flag |= YYJSON_WRITE_PRETTY;
+            char* json = yyjson_mut_val_write_opts(val, flag, nullptr, &data_len, &err);
             if (!json) luaL_error(L, err.msg);
             lua_pushlstring(L, json, data_len);
             yyjson_mut_doc_free(doc);
@@ -24,11 +27,14 @@ namespace ljson {
             return 1;
         }
 
-        int decode(lua_State* L, const char* buf, size_t len) {
+        int decode(lua_State* L) {
+            size_t len;
             yyjson_read_err err;
+            const char* buf = luaL_checklstring(L, 1, &len);
+            bool numkeyable = (bool)luaL_optinteger(L, 2, 0);
             yyjson_doc* doc = yyjson_read_opts((char*)buf, len, YYJSON_READ_ALLOW_INVALID_UNICODE, nullptr, &err);
             if (!doc) luaL_error(L, err.msg);
-            decode_one(L, yyjson_doc_get_root(doc));
+            decode_one(L, yyjson_doc_get_root(doc), numkeyable);
             yyjson_doc_free(doc);
             return 1;
         }
@@ -127,33 +133,37 @@ namespace ljson {
             }
         }
 
-        void array_decode(lua_State* L, yyjson_val *val) {
+        void array_decode(lua_State* L, yyjson_val *val, bool numkeyable) {
             yyjson_arr_iter it;
             yyjson_arr_iter_init(val, &it);
             lua_createtable(L, 0, (int)yyjson_arr_size(val));
             while ((val = yyjson_arr_iter_next(&it))) {
-                decode_one(L, val);
+                decode_one(L, val, numkeyable);
                 lua_rawseti(L, -2, it.idx);
             }
         }
 
-        void table_decode(lua_State* L, yyjson_val *val) {
+        void table_decode(lua_State* L, yyjson_val *val, bool numkeyable) {
             yyjson_obj_iter it;
             yyjson_val *key = nullptr;
             yyjson_obj_iter_init(val, &it);
             lua_createtable(L, 0, (int)yyjson_obj_size(val));
             while ((key = yyjson_obj_iter_next(&it))) {
-                auto skey = unsafe_yyjson_get_str(key);
-                if (lua_stringtonumber(L, skey) == 0) {
-                    //默认尝试 string key 转 number
-                    lua_pushlstring(L, skey, unsafe_yyjson_get_len(key));
+                if (!numkeyable) {
+                    lua_pushlstring(L, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+                } else {
+                    auto skey = unsafe_yyjson_get_str(key);
+                    if (lua_stringtonumber(L, skey) == 0) {
+                        //默认尝试 string key 转 number
+                        lua_pushlstring(L, skey, unsafe_yyjson_get_len(key));
+                    }
                 }
-                decode_one(L, yyjson_obj_iter_get_val(key));
+                decode_one(L, yyjson_obj_iter_get_val(key), numkeyable);
                 lua_rawset(L, -3);
             }
         }
 
-        void decode_one(lua_State* L, yyjson_val *val) {
+        void decode_one(lua_State* L, yyjson_val *val, bool numkeyable = false) {
             switch (yyjson_get_type(val)) {
             case YYJSON_TYPE_NULL:
             case YYJSON_TYPE_NONE:
@@ -169,10 +179,10 @@ namespace ljson {
                 number_decode(L, val);
                 break;
             case YYJSON_TYPE_ARR:
-                array_decode(L, val);
+                array_decode(L, val, numkeyable);
                 break;
             case YYJSON_TYPE_OBJ:
-                table_decode(L, val);
+                table_decode(L, val, numkeyable);
                 break;
             default:
                 lua_pushnil(L);
