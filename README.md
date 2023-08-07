@@ -16,7 +16,7 @@ lua bindings for yyjson(https://github.com/ibireme/yyjson).
 local ljson = require("ljson")
 --编码
 --value: 输入的lua
---pretty: 格式化输出json，取值（nil/0/1）
+--empty_as_array: 空表转为数组，默认转object（nil/0/1）
 --res：输出字符串
 --备注：会抛error，请使用pcall
 local res = ljson.encode(value, pretty)
@@ -27,6 +27,14 @@ local res = ljson.encode(value, pretty)
 --res：输出lua
 --备注：会抛error，请使用pcall
 local res = ljson.decode(value, numkeyable)
+
+--格式化编码
+--value: 输入的lua
+--empty_as_array: 空表转为数组，默认转object（nil/0/1）
+--res：输出字符串
+--备注：会抛error，请使用pcall
+local res = ljson.pretty(value, pretty)
+
 ```
 
 # 用法参考
@@ -39,6 +47,7 @@ local cjson         = require("lcjson")
 local log_debug     = logger.debug
 local json_encode   = json.encode
 local json_decode   = json.decode
+local json_pretty   = json.pretty
 local cjson_encode  = cjson.encode
 local cjson_decode  = cjson.decode
 local new_guid      = codec.guid_new
@@ -51,7 +60,8 @@ local test = {
     player_id = new_guid(),
     c = {[2]=1},
     d = {1, 2, 4, 5, 6},
-    effect = {a=3, b=6}
+    effect = {a=3, b=6},
+    f = {}
 }
 
 local value = {
@@ -77,8 +87,8 @@ local vv = {
 
 log_debug("%s, %s", #vv.detail, vv.detail)
 
-local c = json_encode(vv, 1)
-log_debug("json_encode2: %s", c)
+local c = json_pretty(vv)
+log_debug("json_encode: %s", c)
 
 local d = json_decode(c)
 log_debug("json_decode: %s", d)
@@ -86,7 +96,7 @@ log_debug("json_decode: %s", d)
 local dd = protobuf_mgr:decode_byname("ncmd_cs.login_account_login_res", d.detail)
 log_debug("decode_byname: %s", dd)
 
-local a = json_encode(test)
+local a = json_encode(test, 1)
 log_debug("json_encode: %s", a)
 
 local b = json_decode(a, 1)
@@ -132,5 +142,4 @@ end
 local tt5 = ltime()
 log_debug("tt1:%s, tt2:%s", tt2 - tt1, tt3 - tt2)
 log_debug("tt3:%s, tt4:%s", tt4 - tt3, tt5 - tt4)
-
 ```
