@@ -6,18 +6,20 @@
 using namespace std;
 using namespace luakit;
 
-const uint8_t max_encode_depth = 16;
-
 namespace ljson {
+    const uint8_t max_encode_depth = 16;
+
+    class jsoncodec;
     class yyjson {
     public:
+        friend jsoncodec;
         int encode(lua_State* L) {
-            bool empty_as_array = (bool)luaL_optinteger(L, 2, 0);
+            bool empty_as_array = luaL_opt(L, lua_toboolean, 2, false);
             return encode_impl(L, YYJSON_WRITE_ALLOW_INVALID_UNICODE, empty_as_array);
         }
 
         int pretty(lua_State* L) {
-            bool empty_as_array = (bool)luaL_optinteger(L, 2, 0);
+            bool empty_as_array = luaL_opt(L, lua_toboolean, 2, false);
             yyjson_write_flag flag = YYJSON_WRITE_ALLOW_INVALID_UNICODE | YYJSON_WRITE_PRETTY;
             return encode_impl(L, flag, empty_as_array);
         }
@@ -39,7 +41,7 @@ namespace ljson {
             size_t len;
             yyjson_read_err err;
             const char* buf = luaL_checklstring(L, 1, &len);
-            bool numkeyable = (bool)luaL_optinteger(L, 2, 0);
+            bool numkeyable = luaL_opt(L, lua_toboolean, 2, false);
             yyjson_doc* doc = yyjson_read_opts((char*)buf, len, YYJSON_READ_ALLOW_INVALID_UNICODE, nullptr, &err);
             if (!doc) luaL_error(L, err.msg);
             decode_one(L, yyjson_doc_get_root(doc), numkeyable);
@@ -58,6 +60,10 @@ namespace ljson {
             size_t cur_len = 0;
             while (lua_next(L, index) != 0) {
                 if (!lua_isinteger(L, -2)) {
+                    return false;
+                }
+                size_t key = lua_tointeger(L, -2);
+                if (key <= 0 || key > raw_len) {
                     return false;
                 }
                 lua_pop(L, 1);
@@ -207,5 +213,40 @@ namespace ljson {
                 break;
             }
         }
+    };
+
+    class jsoncodec : public codec_base {
+    public:
+        virtual int load_packet(size_t data_len) {
+            if (!m_slice) return 0;
+            m_packet_len = data_len;
+            return data_len;
+        }
+
+        virtual uint8_t* encode(lua_State* L, int index, size_t* len) {
+            yyjson_write_err err;
+            yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
+            yyjson_mut_val* val = m_json->encode_one(L, doc, false, index, 0);
+            uint8_t* json = (uint8_t*)yyjson_mut_val_write_opts(val, YYJSON_WRITE_ALLOW_INVALID_UNICODE, nullptr, len, &err);
+            return json;
+        }
+
+        virtual size_t decode(lua_State* L) {
+            if (!m_slice) return 0;
+            yyjson_read_err err;
+            yyjson_doc* doc = yyjson_read_opts((char*)m_slice->head(), m_slice->size(), YYJSON_READ_ALLOW_INVALID_UNICODE, nullptr, &err);
+            if (!doc) throw invalid_argument(err.msg);
+            int otop = lua_gettop(L);
+            m_json->decode_one(L, yyjson_doc_get_root(doc), true);
+            yyjson_doc_free(doc);
+            return lua_gettop(L) - otop;
+        }
+
+        void set_json(yyjson* json) {
+            m_json = json;
+        }
+
+    protected:
+        yyjson* m_json;
     };
 }
