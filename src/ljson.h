@@ -24,12 +24,25 @@ namespace ljson {
     class yyjson {
     public:
         friend jsoncodec;
-        yyjson() {
-            yyjson_alc_pool_init(&m_alc, m_buf, sizeof(m_buf));
+        ~yyjson() {
+            if (m_buf) free(m_buf);
         }
    
         int encode(lua_State* L) {
             return encode_impl(L, 0);
+        }
+
+        bool init_alc() {
+            m_buf = malloc(max_jsonbuf_size);
+            if (!m_buf) return false;
+            return yyjson_alc_pool_init(&m_alc, m_buf, max_jsonbuf_size);
+        }
+
+        bool reset_alc(size_t sz) {
+            void* buf = ::realloc(m_buf, sz);
+            if (!buf) return false;
+            m_buf = buf;
+            return yyjson_alc_pool_init(&m_alc, buf, sz);
         }
 
         int pretty(lua_State* L) {
@@ -50,6 +63,9 @@ namespace ljson {
         }
 
         char* encode_core(lua_State* L, yyjson_write_flag flag, bool emy_as_arr, int index, size_t* data_len) {
+            if (!m_buf) {
+                if (!init_alc()) throw lua_exception("json encode memory alloc failed!");
+            }
             yyjson_mut_doc* doc = yyjson_mut_doc_new(&m_alc);
             if (!doc) throw lua_exception("json encode memory not enough!");
 
@@ -76,6 +92,9 @@ namespace ljson {
         }
 
         int decode_core(lua_State* L, char* buf, size_t len, bool numkeyable) {
+            if (!m_buf) {
+                if (!init_alc()) throw lua_exception("json decode memory alloc failed!");
+            }
             yyjson_read_err err;
             yyjson_doc* doc = yyjson_read_opts(buf, len, YYJSON_READ_ALLOW_INVALID_UNICODE | YYJSON_READ_ALLOW_INF_AND_NAN, &m_alc, &err);
             if (!doc) throw lua_exception(err.msg);
@@ -234,7 +253,7 @@ namespace ljson {
         
     protected:
         yyjson_alc m_alc;
-        char m_buf[max_jsonbuf_size];
+        void* m_buf = nullptr;
     };
 
     class jsoncodec : public codec_base {
